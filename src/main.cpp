@@ -7,10 +7,13 @@
 //   1) Kameradan/videodan ilk kare okunur, kullanici ROI secer.
 //   2) KCFTracker o ROI ile init() edilir.
 //   3) Her yeni karede:
-//        - tracker.update(frame)      -> guncel ROI
+//        - tracker.locate(frame)      -> guncel ROI (henuz model EGITILMEZ)
 //        - tracker.getLastResponse()  -> KCF'in response map'i (CV_32FC1)
 //        - tracker.getLastPsr()       -> PSR
 //        - detector.Update(frame, roi, responseMap, psr) -> "Tracking OK/Lost"
+//        - confidence yeterince yuksekse tracker.adapt(frame) ile model
+//          egitilir; dusuk guvende (occlusion/benzer nesne) adaptasyon
+//          atlanir, boylece model bozuk gorunume "ogrenip" drift etmez.
 //   4) Durum (TRACKING/SUSPECT/LOST) ve confidence ekrana yazilir; kutunun
 //      rengi duruma gore degisir. 'r' tusu ile hedef yeniden secilebilir,
 //      ESC ile cikilir.
@@ -103,8 +106,8 @@ int main(int argc, char** argv)
             break;
         }
 
-        // 1) KCF ile takip et.
-        const cv::Rect trackedRoi = tracker.update(frame);
+        // 1) KCF ile konumu bul (henuz modeli EGITME).
+        const cv::Rect trackedRoi = tracker.locate(frame);
 
         // 2) KCF'in bu karedeki response map + PSR'ini detector'a besle.
         const bool trackingOk = detector.Update(frame,
@@ -112,7 +115,16 @@ int main(int argc, char** argv)
                                                  tracker.getLastResponse(),
                                                  tracker.getLastPsr());
 
-        // 3) Gorsellestirme: durum rengine gore kutu + bilgi metni.
+        // 3) Akilli guncelleme: modeli SADECE confidence yeterince
+        // yuksekken egit. Dusuk guvende (occlusion / benzer nesne / LOST)
+        // adaptasyonu atlamak, modelin bozuk gorunume "ogrenip" drift
+        // etmesini engeller.
+        if (detector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
+        {
+            tracker.adapt(frame);
+        }
+
+        // 4) Gorsellestirme: durum rengine gore kutu + bilgi metni.
         const cv::Scalar color = ColorForState(detector.GetState());
         cv::rectangle(frame, trackedRoi, color, 2);
 

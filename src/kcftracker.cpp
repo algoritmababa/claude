@@ -172,8 +172,21 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
     //_den = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
     train(_tmpl, 1.0); // train with initial frame
  }
-// Update position based on the new frame
+// Update position based on the new frame, then unconditionally adapt the
+// model. Confidence-gated adaptasyon isteyen cagiranlar locate()+adapt()
+// ciftini ayri ayri kullanmalidir (bkz. asagida).
 cv::Rect KCFTracker::update(cv::Mat image)
+{
+    const cv::Rect roi = locate(image);
+    adapt(image);
+    return roi;
+}
+
+// Sadece konumu bulur (detect + cok olcekli arama + roi guncelleme).
+// Modeli EGITMEZ: _tmpl/_alphaf degismeden kalir. Boylece cagiran taraf
+// (ornegin bir TrackingFailureDetector ile) bu karenin guvenilir olup
+// olmadigina karar verip adapt()'i kosullu cagirabilir.
+cv::Rect KCFTracker::locate(cv::Mat image)
 {
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 1;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 1;
@@ -235,10 +248,18 @@ cv::Rect KCFTracker::update(cv::Mat image)
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 2;
 
     assert(_roi.width >= 0 && _roi.height >= 0);
-    cv::Mat x = getFeatures(image, 0);
-    train(x, interp_factor);
 
     return _roi;
+}
+
+// locate() ile bulunan guncel _roi uzerinden modeli egitir (train).
+// Yalnizca guvenilir kabul edilen karelerde cagrilmalidir; dusuk
+// guvende (occlusion, benzer nesne vb.) atlanirsa model bozuk gorunume
+// "ogrenip" drift etmez.
+void KCFTracker::adapt(cv::Mat image)
+{
+    cv::Mat x = getFeatures(image, 0);
+    train(x, interp_factor);
 }
 
 

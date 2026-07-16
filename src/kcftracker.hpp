@@ -113,10 +113,19 @@ public:
 
     // --- TrackingFailureDetector entegrasyonu icin disari acilan gozlem arayuzu ---
     // Son detect() cagrisinda hesaplanan ham response map (CV_32FC1) ve PSR
-    // (Peak-to-Sidelobe Ratio). update() her karede detect() cagirdigi icin
-    // bu degerler her update() sonrasi gecerlidir.
+    // (Peak-to-Sidelobe Ratio). locate()/update() sonrasi bu degerler,
+    // kazanan olcegin (multiscale aramada secilen) sonucunu yansitir.
     const cv::Mat& getLastResponse() const { return _last_response; }
     float getLastPsr() const { return _last_psr; }
+
+    // Sadece konumu bulur, modeli EGITMEZ. Confidence-gated adaptasyon icin:
+    //   cv::Rect roi = tracker.locate(frame);
+    //   // roi + getLastResponse()/getLastPsr() ile guven hesapla ...
+    //   if (guvenilir) tracker.adapt(frame);
+    cv::Rect locate(cv::Mat image);
+
+    // locate() ile bulunan guncel roi uzerinden modeli train() ile gunceller.
+    void adapt(cv::Mat image);
 
 protected:
     // Detect object in the current frame.
