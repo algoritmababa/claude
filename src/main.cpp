@@ -20,6 +20,10 @@
 //   4) Durum (TRACKING/SUSPECT/LOST) ve confidence ekrana yazilir; kutunun
 //      rengi duruma gore degisir. 'r' tusu ile hedef yeniden secilebilir,
 //      ESC ile cikilir.
+//   5) (yeni eklendi) Occlusion testi: 'o' tusu fareyle gezdirilen siyah bir
+//      dikdortgeni acar/kapatir ('+'/'-' boyut). Dikdortgen kareye tracker
+//      calismadan ONCE boyandigi icin KCF gercekten ortulmus goruntu gorur;
+//      hedefin ustune getirerek kirilma tespitinin davranisi izlenebilir.
 //
 // Not: Bu dosya, orijinal KCFcpp (joaofaro/KCFcpp) projesinin geri kalan
 // dosyalarina (tracker.h, ffttools.hpp, recttools.hpp, fhog.hpp, labdata.hpp)
@@ -32,11 +36,52 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 
 namespace
 {
+    // (yeni eklendi) Fareyle gezdirilen siyah "occluder" dikdortgeni:
+    // takip edilen nesnenin uzerine getirilerek occlusion aninda takip
+    // kirilmasi tespitinin basarimi test edilir. 'o' ile ac/kapat,
+    // '+'/'-' ile boyut degistir. Dikdortgen kareye TRACKER'DAN ONCE
+    // boyanir; boylece KCF ve detector gercekten ortulmus goruntuyu gorur.
+    struct OccluderState
+    {
+        cv::Point pos;
+        bool      enabled;
+        int       halfSize;
+
+        OccluderState() : pos(-1, -1), enabled(false), halfSize(60) {}
+    };
+
+    void OnMouse(int event, int x, int y, int /*flags*/, void* userdata)
+    {
+        OccluderState* state = static_cast<OccluderState*>(userdata);
+        if (event == cv::EVENT_MOUSEMOVE)
+        {
+            state->pos = cv::Point(x, y);
+        }
+    }
+
+    // Kareyi tracker gormeden once fiziksel olarak karartir.
+    void ApplyOccluder(cv::Mat& frame, const OccluderState& state)
+    {
+        if (!state.enabled || state.pos.x < 0)
+        {
+            return;
+        }
+        cv::Rect occ(state.pos.x - state.halfSize,
+                     state.pos.y - state.halfSize,
+                     state.halfSize * 2, state.halfSize * 2);
+        occ &= cv::Rect(0, 0, frame.cols, frame.rows);
+        if (occ.width > 0 && occ.height > 0)
+        {
+            frame(occ).setTo(cv::Scalar::all(0));
+        }
+    }
+
     cv::Rect SelectTarget(const cv::Mat& frame, const std::string& windowName)
     {
         cv::Rect roi = cv::selectROI(windowName, frame, false, false);
@@ -77,6 +122,12 @@ int main(int argc, char** argv)
     const std::string windowName = "KCF + TrackingFailureDetector";
     cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
 
+    // (yeni eklendi) occluder fare takibi. Dikkat: cv::selectROI kendi fare
+    // callback'ini kurup bizimkini ezdigi icin her SelectTarget cagrisindan
+    // sonra setMouseCallback yeniden cagrilir.
+    OccluderState occluder;
+    cv::setMouseCallback(windowName, OnMouse, &occluder);
+
     cv::Mat frame;
     capture >> frame;
     if (frame.empty())
@@ -86,6 +137,7 @@ int main(int argc, char** argv)
     }
 
     cv::Rect roi = SelectTarget(frame, windowName);
+    cv::setMouseCallback(windowName, OnMouse, &occluder); // (yeni eklendi) selectROI callback'i ezdi, geri kur
     if (roi.width <= 0 || roi.height <= 0)
     {
         std::cerr << "Gecersiz ROI secildi, cikiliyor.\n";
@@ -110,6 +162,10 @@ int main(int argc, char** argv)
         {
             break;
         }
+
+        // (yeni eklendi) Occluder'i kareye TRACKER'DAN ONCE boya: KCF ve
+        // detector ortulmus goruntuyu gormeli ki gercek occlusion testi olsun.
+        ApplyOccluder(frame, occluder);
 
         bool trackingOk = true; // (yeni eklendi)
 
@@ -154,6 +210,10 @@ int main(int argc, char** argv)
         info << detector.GetStateName()
              << " | conf=" << static_cast<int>(detector.GetConfidence())
              << " | psr=" << static_cast<int>(tracker.getLastPsr());
+        if (occluder.enabled) // (yeni eklendi)
+        {
+            info << " | OCC " << occluder.halfSize * 2 << "px";
+        }
         cv::putText(frame, info.str(), cv::Point(10, 25),
                     cv::FONT_HERSHEY_SIMPLEX, 0.7, color, 2);
 
@@ -171,10 +231,23 @@ int main(int argc, char** argv)
         {
             break;
         }
+        if (key == 'o' || key == 'O') // (yeni eklendi) occluder ac/kapat
+        {
+            occluder.enabled = !occluder.enabled;
+        }
+        if (key == '+' || key == '=') // (yeni eklendi) occluder buyut
+        {
+            occluder.halfSize = std::min(occluder.halfSize + 10, 300);
+        }
+        if (key == '-' || key == '_') // (yeni eklendi) occluder kucult
+        {
+            occluder.halfSize = std::max(occluder.halfSize - 10, 10);
+        }
         if (key == 'r' || key == 'R')
         {
             // Hedefi yeniden kilitle: KCF'i ve detector'i sifirdan baslat.
             const cv::Rect newRoi = SelectTarget(frame, windowName);
+            cv::setMouseCallback(windowName, OnMouse, &occluder); // (yeni eklendi) callback'i geri kur
             if (newRoi.width > 0 && newRoi.height > 0)
             {
                 tracker = KCFTracker(true, true, true, frame.channels() == 3); // (degistirildi: onceden lab=true sabitti)
