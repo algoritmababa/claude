@@ -90,6 +90,8 @@ the use of this software, even if advised of the possibility of such damage.
 
 #include <opencv2/core/core_c.h> // cvIplImage(): cv::Mat -> IplImage koprusu
 
+#include <algorithm>
+
 // Constructor
 KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
 {
@@ -237,6 +239,26 @@ cv::Rect KCFTracker::locate(cv::Mat image)
 
     _last_response = bestResponse;
     _last_psr = bestPsr;
+
+    // Olcegin sinirsiz kucul(up sifira dogru gid)mesini/buyumesini engelle:
+    // aksi halde extracted_roi (getFeatures icinde) int'e yuvarlaninca 0
+    // genislik/yukseklige dusebilir ve RectTools::subwindow() assert(0) ile
+    // patlar. Oranti korunarak _scale de ayni katsayiyla duzeltilir.
+    const float minDim = std::max(4.0f, static_cast<float>(cell_size) * 2.0f);
+    const float maxDim = static_cast<float>(std::max(image.cols, image.rows));
+
+    if (_roi.width < minDim || _roi.height < minDim) {
+        const float ratio = minDim / std::min(_roi.width, _roi.height);
+        _roi.width  *= ratio;
+        _roi.height *= ratio;
+        _scale      *= ratio;
+    }
+    if (_roi.width > maxDim || _roi.height > maxDim) {
+        const float ratio = maxDim / std::max(_roi.width, _roi.height);
+        _roi.width  *= ratio;
+        _roi.height *= ratio;
+        _scale      *= ratio;
+    }
 
     // Adjust by cell size and _scale
     _roi.x = cx - _roi.width / 2.0f + ((float) res.x * cell_size * _scale);

@@ -6,7 +6,7 @@
 //
 //   1) Kameradan/videodan ilk kare okunur, kullanici ROI secer.
 //   2) KCFTracker o ROI ile init() edilir.
-//   3) Her yeni karede:
+//   3) Her yeni karede (durum LOST DEGILSE):
 //        - tracker.locate(frame)      -> guncel ROI (henuz model EGITILMEZ)
 //        - tracker.getLastResponse()  -> KCF'in response map'i (CV_32FC1)
 //        - tracker.getLastPsr()       -> PSR
@@ -14,6 +14,9 @@
 //        - confidence yeterince yuksekse tracker.adapt(frame) ile model
 //          egitilir; dusuk guvende (occlusion/benzer nesne) adaptasyon
 //          atlanir, boylece model bozuk gorunume "ogrenip" drift etmez.
+//      Durum LOST ise tracker.locate() hic cagrilmaz, ROI son bilinen
+//      konumunda donar: aksi halde artik guncellenmeyen (bayat) bir
+//      filtreyle gurultuye kilitlenip ROI'yi cerceve disina surukleyebilir.
 //   4) Durum (TRACKING/SUSPECT/LOST) ve confidence ekrana yazilir; kutunun
 //      rengi duruma gore degisir. 'r' tusu ile hedef yeniden secilebilir,
 //      ESC ile cikilir.
@@ -97,6 +100,7 @@ int main(int argc, char** argv)
     tracker.init(roi, frame);
 
     TrackingFailureDetector detector;
+    cv::Rect trackedRoi = roi; // son bilinen ROI; LOST'ta bu deger korunur
 
     while (true)
     {
@@ -106,22 +110,37 @@ int main(int argc, char** argv)
             break;
         }
 
-        // 1) KCF ile konumu bul (henuz modeli EGITME).
-        const cv::Rect trackedRoi = tracker.locate(frame);
+        bool trackingOk = true;
 
-        // 2) KCF'in bu karedeki response map + PSR'ini detector'a besle.
-        const bool trackingOk = detector.Update(frame,
-                                                 trackedRoi,
-                                                 tracker.getLastResponse(),
-                                                 tracker.getLastPsr());
-
-        // 3) Akilli guncelleme: modeli SADECE confidence yeterince
-        // yuksekken egit. Dusuk guvende (occlusion / benzer nesne / LOST)
-        // adaptasyonu atlamak, modelin bozuk gorunume "ogrenip" drift
-        // etmesini engeller.
-        if (detector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
+        // LOST durumundayken KCF'i calistirmaya devam etmiyoruz: adapt()
+        // zaten atlandigi icin model bayatlamis oluyor, boyle bir modelle
+        // "en iyi eslesmeyi" aramaya devam etmek ROI'yi gurultuye kilitleyip
+        // cerceve disina surukleyebiliyor (RectTools::subwindow() icinde
+        // assert(0)). LOST'ta ROI donar, kullanici 'r' ile yeniden
+        // secene kadar beklenir.
+        if (detector.GetState() != TrackingFailureDetector::State::LOST)
         {
-            tracker.adapt(frame);
+            // 1) KCF ile konumu bul (henuz modeli EGITME).
+            trackedRoi = tracker.locate(frame);
+
+            // 2) KCF'in bu karedeki response map + PSR'ini detector'a besle.
+            trackingOk = detector.Update(frame,
+                                          trackedRoi,
+                                          tracker.getLastResponse(),
+                                          tracker.getLastPsr());
+
+            // 3) Akilli guncelleme: modeli SADECE confidence yeterince
+            // yuksekken egit. Dusuk guvende (occlusion / benzer nesne)
+            // adaptasyonu atlamak, modelin bozuk gorunume "ogrenip" drift
+            // etmesini engeller.
+            if (detector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
+            {
+                tracker.adapt(frame);
+            }
+        }
+        else
+        {
+            trackingOk = false;
         }
 
         // 4) Gorsellestirme: durum rengine gore kutu + bilgi metni.
@@ -158,6 +177,7 @@ int main(int argc, char** argv)
                 tracker = KCFTracker(true, true, true, frame.channels() == 3);
                 tracker.init(newRoi, frame);
                 detector.Reset();
+                trackedRoi = newRoi;
             }
         }
     }
