@@ -116,7 +116,17 @@ inline cv::Mat subwindow(const cv::Mat &in, const cv::Rect & window, int borderT
 {
     cv::Rect cutWindow = window;
     RectTools::limit(cutWindow, in.cols, in.rows);
-    if (cutWindow.height <= 0 || cutWindow.width <= 0)assert(0); //return cv::Mat(window.height,window.width,in.type(),0) ;
+    // (yeni eklendi) Istenen pencere goruntuyle hic kesismiyorsa (takip
+    // tamamen cerceve disina kaydiginda olur) assert(0) ile cokmek yerine
+    // sifir dolu guvenli bir patch dondur. KCF bundan anlamli bir tepe
+    // uretemez, TrackingFailureDetector de bunu dusuk guvenli kare olarak
+    // isleyip durum makinesini LOST'a tasir; uygulama cokmez.
+    if (cutWindow.height <= 0 || cutWindow.width <= 0)
+    {
+        const int safeW = (window.width  > 0) ? window.width  : 1;
+        const int safeH = (window.height > 0) ? window.height : 1;
+        return cv::Mat(safeH, safeW, in.type(), cv::Scalar::all(0));
+    }
     cv::Rect border = RectTools::getBorder(window, cutWindow);
     cv::Mat res = in(cutWindow);
 
