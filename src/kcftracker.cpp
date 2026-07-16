@@ -460,6 +460,17 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
     cv::Mat FeaturesMap;
     cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
 
+    // (yeni eklendi) subwindow bos/dejenere bir patch dondururse (pencere
+    // goruntuyle kesismiyor ya da 0 boyuta yuvarlandi) cv::resize'a bos
+    // kaynak gitmesin: OpenCV "ssize.width > 0" assert'iyle firlatir
+    // (resize.cpp). Sifir dolu guvenli patch ile devam et; KCF bundan tepe
+    // uretemez, detector kareyi dusuk guven olarak isler.
+    if (z.empty() || _tmpl_sz.width <= 0 || _tmpl_sz.height <= 0) {
+        if (_tmpl_sz.width <= 0)  _tmpl_sz.width  = 2 * cell_size;
+        if (_tmpl_sz.height <= 0) _tmpl_sz.height = 2 * cell_size;
+        z = cv::Mat::zeros(_tmpl_sz, image.type());
+    }
+
     if (z.cols != _tmpl_sz.width || z.rows != _tmpl_sz.height) {
         cv::resize(z, z, _tmpl_sz);
     }
