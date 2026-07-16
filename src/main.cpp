@@ -86,8 +86,11 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // hog=true, fixed_window=true, multiscale=true, lab=true (varsayilan KCF ayarlari)
-    KCFTracker tracker(true, true, true, true);
+    // hog=true, fixed_window=true, multiscale=true. Lab renk ozelligi yalnizca
+    // 3 kanalli (renkli) girdide acilir; gri/IR kaynakta Lab donusumu
+    // (cvtColor CV_BGR2Lab) 1 kanalli goruntude patlar.
+    const bool useLab = (frame.channels() == 3);
+    KCFTracker tracker(true, true, true, useLab);
     tracker.init(roi, frame);
 
     TrackingFailureDetector detector;
@@ -140,7 +143,7 @@ int main(int argc, char** argv)
             const cv::Rect newRoi = SelectTarget(frame, windowName);
             if (newRoi.width > 0 && newRoi.height > 0)
             {
-                tracker = KCFTracker(true, true, true, true);
+                tracker = KCFTracker(true, true, true, frame.channels() == 3);
                 tracker.init(newRoi, frame);
                 detector.Reset();
             }
