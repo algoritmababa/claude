@@ -186,6 +186,12 @@ cv::Rect KCFTracker::update(cv::Mat image)
 
     float peak_value;
     cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value);
+    // detect() cok olcekli testte birden fazla kez cagrilir ve her seferinde
+    // _last_response/_last_psr'i ezer; TrackingFailureDetector'a kazanan
+    // olcegin degil, en son test edilen olcegin haritasi gitmesin diye
+    // kazanan sonucu ayrica sakliyoruz.
+    cv::Mat bestResponse = _last_response.clone();
+    float bestPsr = _last_psr;
 
     if (scale_step != 1) {
         // Test at a smaller _scale
@@ -198,6 +204,8 @@ cv::Rect KCFTracker::update(cv::Mat image)
             _scale /= scale_step;
             _roi.width /= scale_step;
             _roi.height /= scale_step;
+            bestResponse = _last_response.clone();
+            bestPsr = _last_psr;
         }
 
         // Test at a bigger _scale
@@ -209,8 +217,13 @@ cv::Rect KCFTracker::update(cv::Mat image)
             _scale *= scale_step;
             _roi.width *= scale_step;
             _roi.height *= scale_step;
+            bestResponse = _last_response.clone();
+            bestPsr = _last_psr;
         }
     }
+
+    _last_response = bestResponse;
+    _last_psr = bestPsr;
 
     // Adjust by cell size and _scale
     _roi.x = cx - _roi.width / 2.0f + ((float) res.x * cell_size * _scale);
