@@ -9,6 +9,7 @@ find_package(OpenCV REQUIRED)
 add_executable(kcf_demo
     src/main.cpp
     src/kcftracker.cpp
+    src/fhog.cpp
     src/TrackingFailureDetector.cpp
 )
 

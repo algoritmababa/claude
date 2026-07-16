@@ -19,21 +19,30 @@ ornek bir entegrasyon sunar.
   videodan okur, ROI secilir, her karede KCF ile takip edilip
   `TrackingFailureDetector` ile dogrulanir; duruma gore kutu rengi ve
   confidence skoru gosterilir.
+- `src/tracker.h`, `src/ffttools.hpp`, `src/recttools.hpp`, `src/fhog.hpp`,
+  `src/fhog.cpp`, `src/labdata.hpp` — [joaofaro/KCFcpp](https://github.com/joaofaro/KCFcpp)
+  deposundan alinan, KCFTracker'in derlenebilmesi icin gereken destek
+  dosyalari (degistirilmeden eklendi).
+
+## Lisans notu
+
+Bu depodaki KCF destek dosyalarinin cogu (`ffttools.hpp`, `recttools.hpp`,
+`fhog.hpp`/`.cpp`, `kcftracker.hpp`/`.cpp`) BSD 3-clause lisanslidir; tam
+metin `LICENSE-KCFcpp` dosyasinda ve ilgili dosyalarin basliklarinda yer
+alir.
+
+`src/tracker.h` ise farkli ve daha kisitlayici bir lisans notuyla gelir
+(Henriques/Bailer, "sadece arastirma amacli"; ticari veya farkli bir
+kullanim icin yazarlardan izin gerektigini, degistirilmis/degistirilmemis
+halinin kendi baniza yayinlanmasinin izinsiz oldugunu belirtir). Bu dosya,
+kullanicinin acik talimatiyla depoya eklenmistir; production/ticari
+kullanimdan once orijinal yazarlardan izin alinmasi onerilir.
 
 ## Eksik bagimliliklar
 
-`kcftracker.cpp`, orijinal KCFcpp projesinin su destek dosyalarina ihtiyac
-duyar (bu depoya dahil edilmemistir, kullanicinin yalnizca `kcftracker.hpp`
-ve `kcftracker.cpp` dosyalarini paylasmasi nedeniyle):
-
-- `tracker.h` (soyut `Tracker` taban sinifi)
-- `ffttools.hpp`
-- `recttools.hpp`
-- `fhog.hpp`
-- `labdata.hpp`
-
-Bu dosyalari [joaofaro/KCFcpp](https://github.com/joaofaro/KCFcpp)
-deposundan alip `src/` klasorune eklemeden proje derlenmez.
+Yukaridaki destek dosyalari bu depoya eklendigi icin proje artik
+KCFcpp'nin geri kalanina bagimli degildir; OpenCV disinda ek bir bagimlilik
+gerekmez.
 
 ## Derleme
 
