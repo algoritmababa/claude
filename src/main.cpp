@@ -85,15 +85,10 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // (yeni eklendi) Cok kucuk secimler KCF'i ilk kareden dengesizlestirip
-    // subwindow hatalarina yol acabiliyor; makul bir alt sinir uygula.
-    const int minRoiSize = 16; // px
-
     cv::Rect roi = SelectTarget(frame, windowName);
-    if (roi.width < minRoiSize || roi.height < minRoiSize)
+    if (roi.width <= 0 || roi.height <= 0)
     {
-        std::cerr << "Gecersiz/cok kucuk ROI secildi (en az "
-                  << minRoiSize << "x" << minRoiSize << " px olmali), cikiliyor.\n";
+        std::cerr << "Gecersiz ROI secildi, cikiliyor.\n";
         return 1;
     }
 
@@ -178,7 +173,7 @@ int main(int argc, char** argv)
         {
             // Hedefi yeniden kilitle: KCF'i ve detector'i sifirdan baslat.
             const cv::Rect newRoi = SelectTarget(frame, windowName);
-            if (newRoi.width >= minRoiSize && newRoi.height >= minRoiSize) // (yeni eklendi) alt sinir
+            if (newRoi.width > 0 && newRoi.height > 0)
             {
                 tracker = KCFTracker(true, true, true, frame.channels() == 3);
                 tracker.init(newRoi, frame);
