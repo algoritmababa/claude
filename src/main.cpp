@@ -92,9 +92,10 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // hog=true, fixed_window=true, multiscale=true. Lab renk ozelligi yalnizca
-    // 3 kanalli (renkli) girdide acilir; gri/IR kaynakta Lab donusumu
-    // (cvtColor CV_BGR2Lab) 1 kanalli goruntude patlar.
+    // (degistirildi: onceden lab=true sabitti) hog=true, fixed_window=true,
+    // multiscale=true. Lab renk ozelligi yalnizca 3 kanalli (renkli) girdide
+    // acilir; gri/IR kaynakta Lab donusumu (cvtColor CV_BGR2Lab) 1 kanalli
+    // goruntude patlar.
     const bool useLab = (frame.channels() == 3);
     KCFTracker tracker(true, true, true, useLab);
     tracker.init(roi, frame);
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
         // secene kadar beklenir.
         if (detector.GetState() != TrackingFailureDetector::State::LOST) // (yeni eklendi)
         {
+            // (degistirildi: onceden tracker.update() idi)
             // 1) KCF ile konumu bul (henuz modeli EGITME).
             trackedRoi = tracker.locate(frame);
 
@@ -175,7 +177,7 @@ int main(int argc, char** argv)
             const cv::Rect newRoi = SelectTarget(frame, windowName);
             if (newRoi.width > 0 && newRoi.height > 0)
             {
-                tracker = KCFTracker(true, true, true, frame.channels() == 3);
+                tracker = KCFTracker(true, true, true, frame.channels() == 3); // (degistirildi: onceden lab=true sabitti)
                 tracker.init(newRoi, frame);
                 detector.Reset();
                 trackedRoi = newRoi; // (yeni eklendi) kutu hemen yeni secime atlasin
