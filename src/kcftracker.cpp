@@ -103,6 +103,7 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
     output_sigma_factor = 0.125;
 
     _last_psr = 0.0f;
+    _lastTrackingOk = true;
 
     if (hog) {    // HOG
         // VOT
@@ -173,14 +174,36 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
     //_num = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
     //_den = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
     train(_tmpl, 1.0); // train with initial frame
+
+    // Yeni hedef kilitlendi: gomulu kirilma dedektorunu da sifirla.
+    // (Referanslari ilk update() karesinde kendisi kurar.)
+    _failureDetector.Reset();
+    _lastTrackingOk = true;
  }
-// Update position based on the new frame, then unconditionally adapt the
-// model. Confidence-gated adaptasyon isteyen cagiranlar locate()+adapt()
-// ciftini ayri ayri kullanmalidir (bkz. asagida).
+// Update position based on the new frame.
+// Akilli akis tek cati altinda:
+//   LOST  -> locate/adapt cagrilmaz, son ROI donuk doner (bayat modelle
+//            arama ROI'yi cerceve disina surukleyebilir)
+//   degil -> locate() ile konum bulunur, response map + PSR gomulu
+//            TrackingFailureDetector'a beslenir, confidence yeterliyse
+//            adapt() ile model egitilir (drift korumasi)
 cv::Rect KCFTracker::update(cv::Mat image)
 {
+    if (_failureDetector.GetState() == TrackingFailureDetector::State::LOST)
+    {
+        _lastTrackingOk = false;
+        return _roi;
+    }
+
     const cv::Rect roi = locate(image);
-    adapt(image);
+
+    _lastTrackingOk = _failureDetector.Update(image, roi, _last_response, _last_psr);
+
+    if (_failureDetector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
+    {
+        adapt(image);
+    }
+
     return roi;
 }
 

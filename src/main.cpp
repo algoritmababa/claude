@@ -1,22 +1,18 @@
 // main.cpp
 //
-// KCFTracker (kcftracker.hpp/.cpp) ile TrackingFailureDetector
-// (TrackingFailureDetector.h/.cpp) modullerini bir arada kullanan ornek
-// uygulama. Akis:
+// KCFTracker kullanan ornek uygulama. Takip-kirilmasi tespiti
+// (TrackingFailureDetector) artik KCFTracker'in ICINE gomulu; main yalnizca
+// kcftracker.hpp API'siyle konusur. Akis:
 //
 //   1) Kameradan/videodan ilk kare okunur, kullanici ROI secer.
-//   2) KCFTracker o ROI ile init() edilir.
-//   3) Her yeni karede (durum LOST DEGILSE):
-//        - tracker.locate(frame)      -> guncel ROI (henuz model EGITILMEZ)
-//        - tracker.getLastResponse()  -> KCF'in response map'i (CV_32FC1)
-//        - tracker.getLastPsr()       -> PSR
-//        - detector.Update(frame, roi, responseMap, psr) -> "Tracking OK/Lost"
-//        - confidence yeterince yuksekse tracker.adapt(frame) ile model
-//          egitilir; dusuk guvende (occlusion/benzer nesne) adaptasyon
-//          atlanir, boylece model bozuk gorunume "ogrenip" drift etmez.
-//      Durum LOST ise tracker.locate() hic cagrilmaz, ROI son bilinen
-//      konumunda donar: aksi halde artik guncellenmeyen (bayat) bir
-//      filtreyle gurultuye kilitlenip ROI'yi cerceve disina surukleyebilir.
+//   2) KCFTracker o ROI ile init() edilir (gomulu dedektor da sifirlanir).
+//   3) Her yeni karede tracker.update(frame) cagrilir; icerde:
+//        - LOST degilse: locate() ile konum bulunur, response map + PSR
+//          gomulu dedektore beslenir, confidence yeterliyse adapt() ile
+//          model egitilir (dusuk guvende adaptasyon atlanir -> drift yok).
+//        - LOST ise: locate/adapt hic calismaz, son ROI donuk doner.
+//      Sonuclar tracker.isTrackingOk() / getConfidence() /
+//      getTrackState(Name)() ile okunur.
 //   4) Durum (TRACKING/SUSPECT/LOST) ve confidence ekrana yazilir; kutunun
 //      rengi duruma gore degisir. 'r' tusu ile hedef yeniden secilebilir,
 //      ESC ile cikilir.
@@ -25,14 +21,11 @@
 //      calismadan ONCE boyandigi icin KCF gercekten ortulmus goruntu gorur;
 //      hedefin ustune getirerek kirilma tespitinin davranisi izlenebilir.
 //
-// Not: Bu dosya, orijinal KCFcpp (joaofaro/KCFcpp) projesinin geri kalan
-// dosyalarina (tracker.h, ffttools.hpp, recttools.hpp, fhog.hpp, labdata.hpp)
-// ihtiyac duyar. Bu depoya yalnizca kullanicinin yukledigi 4 dosya + bu
-// main.cpp eklenmistir; KCFcpp'nin destek dosyalari ayrica projeye dahil
-// edilmelidir (bkz. README.md).
+// Not: kcftracker, KCFcpp destek dosyalarina (tracker.h, ffttools.hpp,
+// recttools.hpp, fhog.hpp, labdata.hpp) ve TrackingFailureDetector.h/.cpp'ye
+// ihtiyac duyar; hepsi bu depoda src/ altindadir.
 
 #include "kcftracker.hpp"
-#include "TrackingFailureDetector.h"
 
 #include <opencv2/opencv.hpp>
 
@@ -163,7 +156,6 @@ int main(int argc, char** argv)
     KCFTracker tracker(true, true, true, useLab);
     tracker.init(roi, frame);
 
-    TrackingFailureDetector detector;
     cv::Rect trackedRoi = roi; // son bilinen ROI; LOST'ta bu deger korunur
 
     while (true)
@@ -178,46 +170,19 @@ int main(int argc, char** argv)
         // detector ortulmus goruntuyu gormeli ki gercek occlusion testi olsun.
         ApplyOccluder(frame, occluder);
 
-        bool trackingOk = true;
+        // Takip + kirilma tespiti + kosullu model egitimi tek cagrida:
+        // hepsi KCFTracker::update() icinde yurur. LOST durumunda update()
+        // son ROI'yi donuk dondurur (locate/adapt calismaz).
+        trackedRoi = tracker.update(frame);
+        const bool trackingOk = tracker.isTrackingOk();
 
-        // LOST durumundayken KCF'i calistirmaya devam etmiyoruz: adapt()
-        // zaten atlandigi icin model bayatlamis oluyor, boyle bir modelle
-        // "en iyi eslesmeyi" aramaya devam etmek ROI'yi gurultuye kilitleyip
-        // cerceve disina surukleyebiliyor (RectTools::subwindow() icinde
-        // assert(0)). LOST'ta ROI donar, kullanici 'r' ile yeniden
-        // secene kadar beklenir.
-        if (detector.GetState() != TrackingFailureDetector::State::LOST)
-        {
-            // 1) KCF ile konumu bul (henuz modeli EGITME).
-            trackedRoi = tracker.locate(frame);
-
-            // 2) KCF'in bu karedeki response map + PSR'ini detector'a besle.
-            trackingOk = detector.Update(frame,
-                                          trackedRoi,
-                                          tracker.getLastResponse(),
-                                          tracker.getLastPsr());
-
-            // 3) Akilli guncelleme: modeli SADECE confidence yeterince
-            // yuksekken egit. Dusuk guvende (occlusion / benzer nesne)
-            // adaptasyonu atlamak, modelin bozuk gorunume "ogrenip" drift
-            // etmesini engeller.
-            if (detector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
-            {
-                tracker.adapt(frame);
-            }
-        }
-        else // LOST: locate/adapt cagrilmaz, ROI donuk kalir
-        {
-            trackingOk = false;
-        }
-
-        // 4) Gorsellestirme: durum rengine gore kutu + bilgi metni.
-        const cv::Scalar color = ColorForState(detector.GetState());
+        // Gorsellestirme: durum rengine gore kutu + bilgi metni.
+        const cv::Scalar color = ColorForState(tracker.getTrackState());
         cv::rectangle(frame, trackedRoi, color, 2);
 
         std::ostringstream info;
-        info << detector.GetStateName()
-             << " | conf=" << static_cast<int>(detector.GetConfidence())
+        info << tracker.getTrackStateName()
+             << " | conf=" << static_cast<int>(tracker.getConfidence())
              << " | psr=" << static_cast<int>(tracker.getLastPsr());
         if (occluder.enabled) // (yeni eklendi)
         {
@@ -254,14 +219,13 @@ int main(int argc, char** argv)
         }
         if (key == 'r' || key == 'R')
         {
-            // Hedefi yeniden kilitle: KCF'i ve detector'i sifirdan baslat.
+            // Hedefi yeniden kilitle: init() gomulu dedektoru de sifirlar.
             const cv::Rect newRoi = SelectTarget(frame, windowName);
             cv::setMouseCallback(windowName, OnMouse, &occluder); // (yeni eklendi) callback'i geri kur
             if (newRoi.width > 0 && newRoi.height > 0)
             {
                 tracker = KCFTracker(true, true, true, frame.channels() == 3);
                 tracker.init(newRoi, frame);
-                detector.Reset();
                 trackedRoi = newRoi; // kutu hemen yeni secime atlasin
             }
         }

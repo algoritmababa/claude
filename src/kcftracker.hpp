@@ -83,6 +83,7 @@ the use of this software, even if advised of the possibility of such damage.
 #pragma once
 
 #include "tracker.h"
+#include "TrackingFailureDetector.h"
 
 #ifndef _OPENCV_KCFTRACKER_HPP_
 #define _OPENCV_KCFTRACKER_HPP_
@@ -94,10 +95,16 @@ public:
     // Constructor
     KCFTracker(bool hog = true, bool fixed_window = true, bool multiscale = true, bool lab = true);
 
-    // Initialize tracker
+    // Initialize tracker. Gomulu TrackingFailureDetector'i da sifirlar.
     virtual void init(const cv::Rect &roi, cv::Mat image);
 
-    // Update position based on the new frame
+    // Update position based on the new frame.
+    // Akilli akisin tamami icerde yurur:
+    //   1) locate()  -> konum bul (model egitilmez)
+    //   2) gomulu TrackingFailureDetector'a response map + PSR beslenir
+    //   3) confidence yeterince yuksekse adapt() ile model egitilir
+    //   4) durum LOST ise locate/adapt hic cagrilmaz, son ROI donuk doner
+    // Sonuc isTrackingOk()/getConfidence()/getTrackState() ile okunur.
     virtual cv::Rect update(cv::Mat image);
 
     float interp_factor; // linear interpolation factor for adaptation
@@ -118,14 +125,21 @@ public:
     const cv::Mat& getLastResponse() const { return _last_response; }
     float getLastPsr() const { return _last_psr; }
 
-    // Sadece konumu bulur, modeli EGITMEZ. Confidence-gated adaptasyon icin:
-    //   cv::Rect roi = tracker.locate(frame);
-    //   // roi + getLastResponse()/getLastPsr() ile guven hesapla ...
-    //   if (guvenilir) tracker.adapt(frame);
+    // Sadece konumu bulur, modeli EGITMEZ. update() bunu icerde kullanir;
+    // akisi kendisi kurmak isteyenler icin ayrica public birakildi.
     cv::Rect locate(cv::Mat image);
 
     // locate() ile bulunan guncel roi uzerinden modeli train() ile gunceller.
     void adapt(cv::Mat image);
+
+    // --- Gomulu takip-kirilmasi tespiti (TrackingFailureDetector) ----------
+    // update() sonrasi okunacak sonuclar; main'in ayrica detector kurmasina
+    // gerek yoktur.
+    bool   isTrackingOk()  const { return _lastTrackingOk; }               // true = "Tracking OK"
+    double getConfidence() const { return _failureDetector.GetConfidence(); } // 0-100, EMA'li
+    TrackingFailureDetector::State getTrackState() const { return _failureDetector.GetState(); }
+    const char* getTrackStateName() const { return _failureDetector.GetStateName(); }
+    const TrackingFailureDetector& getFailureDetector() const { return _failureDetector; } // metrik/loglama erisimi
 
 protected:
     // Detect object in the current frame.
@@ -172,4 +186,7 @@ private:
 
     cv::Mat _last_response; // detect() icindeki 'res', CV_32FC1
     float   _last_psr;
+
+    TrackingFailureDetector _failureDetector; // gomulu kirilma tespiti
+    bool    _lastTrackingOk;                  // son update()'in sonucu
 };
