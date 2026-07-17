@@ -14,8 +14,7 @@
 //      Sonuclar tracker.isTrackingOk() / getConfidence() /
 //      getTrackState(Name)() ile okunur.
 //   4) Durum (TRACKING/SUSPECT/LOST) ve confidence ekrana yazilir; kutunun
-//      rengi duruma gore degisir. 'r' tusu ile hedef yeniden secilebilir,
-//      ESC ile cikilir.
+//      rengi duruma gore degisir. ESC ile cikilir.
 //
 // Not: kcftracker, KCFcpp destek dosyalarina (tracker.h, ffttools.hpp,
 // recttools.hpp, fhog.hpp, labdata.hpp) ve TrackingFailureDetector.h/.cpp'ye
@@ -121,7 +120,7 @@ int main(int argc, char** argv)
 
         if (!trackingOk)
         {
-            cv::putText(frame, "TRACKING LOST - 'r' ile yeniden secin",
+            cv::putText(frame, "TRACKING LOST",
                         cv::Point(10, 55), cv::FONT_HERSHEY_SIMPLEX, 0.7,
                         cv::Scalar(0, 0, 255), 2);
         }
@@ -132,17 +131,6 @@ int main(int argc, char** argv)
         if (key == 27) // ESC
         {
             break;
-        }
-        if (key == 'r' || key == 'R')
-        {
-            // Hedefi yeniden kilitle: init() gomulu dedektoru de sifirlar.
-            const cv::Rect newRoi = SelectTarget(frame, windowName);
-            if (newRoi.width > 0 && newRoi.height > 0)
-            {
-                tracker = KCFTracker(true, true, true, frame.channels() == 3);
-                tracker.init(newRoi, frame);
-                trackedRoi = newRoi; // kutu hemen yeni secime atlasin
-            }
         }
     }
 
