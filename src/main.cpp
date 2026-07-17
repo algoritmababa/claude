@@ -156,16 +156,15 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // (degistirildi: onceden lab=true sabitti) hog=true, fixed_window=true,
-    // multiscale=true. Lab renk ozelligi yalnizca 3 kanalli (renkli) girdide
-    // acilir; gri/IR kaynakta Lab donusumu (cvtColor CV_BGR2Lab) 1 kanalli
-    // goruntude patlar.
+    // hog=true, fixed_window=true, multiscale=true. Lab renk ozelligi
+    // yalnizca 3 kanalli (renkli) girdide acilir; gri/IR kaynakta Lab
+    // donusumu (cvtColor CV_BGR2Lab) 1 kanalli goruntude patlar.
     const bool useLab = (frame.channels() == 3);
     KCFTracker tracker(true, true, true, useLab);
     tracker.init(roi, frame);
 
     TrackingFailureDetector detector;
-    cv::Rect trackedRoi = roi; // son bilinen ROI; LOST'ta bu deger korunur (yeni eklendi)
+    cv::Rect trackedRoi = roi; // son bilinen ROI; LOST'ta bu deger korunur
 
     while (true)
     {
@@ -179,18 +178,16 @@ int main(int argc, char** argv)
         // detector ortulmus goruntuyu gormeli ki gercek occlusion testi olsun.
         ApplyOccluder(frame, occluder);
 
-        bool trackingOk = true; // (yeni eklendi)
+        bool trackingOk = true;
 
-        // (yeni eklendi) LOST kontrolu:
         // LOST durumundayken KCF'i calistirmaya devam etmiyoruz: adapt()
         // zaten atlandigi icin model bayatlamis oluyor, boyle bir modelle
         // "en iyi eslesmeyi" aramaya devam etmek ROI'yi gurultuye kilitleyip
         // cerceve disina surukleyebiliyor (RectTools::subwindow() icinde
         // assert(0)). LOST'ta ROI donar, kullanici 'r' ile yeniden
         // secene kadar beklenir.
-        if (detector.GetState() != TrackingFailureDetector::State::LOST) // (yeni eklendi)
+        if (detector.GetState() != TrackingFailureDetector::State::LOST)
         {
-            // (degistirildi: onceden tracker.update() idi)
             // 1) KCF ile konumu bul (henuz modeli EGITME).
             trackedRoi = tracker.locate(frame);
 
@@ -200,16 +197,16 @@ int main(int argc, char** argv)
                                           tracker.getLastResponse(),
                                           tracker.getLastPsr());
 
-            // (yeni eklendi) 3) Akilli guncelleme: modeli SADECE confidence
-            // yeterince yuksekken egit. Dusuk guvende (occlusion / benzer
-            // nesne) adaptasyonu atlamak, modelin bozuk gorunume "ogrenip"
-            // drift etmesini engeller.
+            // 3) Akilli guncelleme: modeli SADECE confidence yeterince
+            // yuksekken egit. Dusuk guvende (occlusion / benzer nesne)
+            // adaptasyonu atlamak, modelin bozuk gorunume "ogrenip" drift
+            // etmesini engeller.
             if (detector.GetConfidence() >= tfd_config::REFERENCE_UPDATE_MIN_CONFIDENCE)
             {
                 tracker.adapt(frame);
             }
         }
-        else // (yeni eklendi) LOST: locate/adapt cagrilmaz, ROI donuk kalir
+        else // LOST: locate/adapt cagrilmaz, ROI donuk kalir
         {
             trackingOk = false;
         }
@@ -262,10 +259,10 @@ int main(int argc, char** argv)
             cv::setMouseCallback(windowName, OnMouse, &occluder); // (yeni eklendi) callback'i geri kur
             if (newRoi.width > 0 && newRoi.height > 0)
             {
-                tracker = KCFTracker(true, true, true, frame.channels() == 3); // (degistirildi: onceden lab=true sabitti)
+                tracker = KCFTracker(true, true, true, frame.channels() == 3);
                 tracker.init(newRoi, frame);
                 detector.Reset();
-                trackedRoi = newRoi; // (yeni eklendi) kutu hemen yeni secime atlasin
+                trackedRoi = newRoi; // kutu hemen yeni secime atlasin
             }
         }
     }

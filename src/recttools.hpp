@@ -116,7 +116,7 @@ inline cv::Mat subwindow(const cv::Mat &in, const cv::Rect & window, int borderT
 {
     cv::Rect cutWindow = window;
     RectTools::limit(cutWindow, in.cols, in.rows);
-    // (yeni eklendi) Istenen pencere goruntuyle hic kesismiyorsa (takip
+    // Istenen pencere goruntuyle hic kesismiyorsa (takip
     // tamamen cerceve disina kaydiginda olur) assert(0) ile cokmek yerine
     // sifir dolu guvenli bir patch dondur. KCF bundan anlamli bir tepe
     // uretemez, TrackingFailureDetector de bunu dusuk guvenli kare olarak

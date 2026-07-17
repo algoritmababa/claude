@@ -460,7 +460,7 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
     cv::Mat FeaturesMap;
     cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
 
-    // (yeni eklendi) subwindow bos/dejenere bir patch dondururse (pencere
+    // subwindow bos/dejenere bir patch dondururse (pencere
     // goruntuyle kesismiyor ya da 0 boyuta yuvarlandi) cv::resize'a bos
     // kaynak gitmesin: OpenCV "ssize.width > 0" assert'iyle firlatir
     // (resize.cpp). Sifir dolu guvenli patch ile devam et; KCF bundan tepe
