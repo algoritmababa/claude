@@ -68,17 +68,29 @@ namespace
     // Kareyi tracker gormeden once fiziksel olarak karartir.
     void ApplyOccluder(cv::Mat& frame, const OccluderState& state)
     {
-        if (!state.enabled || state.pos.x < 0)
+        if (!state.enabled)
         {
             return;
         }
-        cv::Rect occ(state.pos.x - state.halfSize,
-                     state.pos.y - state.halfSize,
+        // (yeni eklendi) Fare henuz pencere uzerinde hic hareket etmediyse
+        // (pos = -1,-1) dikdortgen gorunmez kaliyordu; o durumda kare
+        // ortasinda baslat ki 'o' basilir basilmaz gorunsun.
+        cv::Point center = state.pos;
+        if (center.x < 0)
+        {
+            center = cv::Point(frame.cols / 2, frame.rows / 2);
+        }
+        cv::Rect occ(center.x - state.halfSize,
+                     center.y - state.halfSize,
                      state.halfSize * 2, state.halfSize * 2);
         occ &= cv::Rect(0, 0, frame.cols, frame.rows);
         if (occ.width > 0 && occ.height > 0)
         {
             frame(occ).setTo(cv::Scalar::all(0));
+            // (yeni eklendi) siyah/koyu sahnede de secilebilsin diye ince
+            // gri cerceve (tracker bunu da gorur ama 1px'lik etkisi ihmal
+            // edilebilir).
+            cv::rectangle(frame, occ, cv::Scalar::all(128), 1);
         }
     }
 
