@@ -270,12 +270,14 @@ cv::Rect KCFTracker::locate(cv::Mat image)
     const float minDim = std::max(4.0f, static_cast<float>(cell_size) * 2.0f);
     const float maxDim = static_cast<float>(std::max(image.cols, image.rows));
 
-    if (_roi.width < minDim || _roi.height < minDim) {
-        const float ratio = minDim / std::min(_roi.width, _roi.height);
-        _roi.width  *= ratio;
-        _roi.height *= ratio;
-        _scale      *= ratio;
-    }
+    // Once boyutlari POZITIF'e sabitle. Multiscale bolmesi ya da bozuk bir
+    // gelen _roi yuzunden bir kenar 0/negatif olabilir; boyle bir degerle
+    // asagidaki oran hesabi (minDim / min(w,h)) 0'a bolme -> inf veya
+    // negatife bolme -> isaret ters cevirme yapip boyutu negatife dusurur
+    // (locate() sonundaki assert bu yuzden patlar).
+    if (_roi.width  < minDim) _roi.width  = minDim;
+    if (_roi.height < minDim) _roi.height = minDim;
+
     if (_roi.width > maxDim || _roi.height > maxDim) {
         const float ratio = maxDim / std::max(_roi.width, _roi.height);
         _roi.width  *= ratio;
@@ -292,6 +294,8 @@ cv::Rect KCFTracker::locate(cv::Mat image)
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 2;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 2;
 
+    // Boyutlar yukarida minDim'e sabitlendigi icin bu her zaman saglanir;
+    // yine de degismeyen bir invaryant olarak birakildi.
     assert(_roi.width >= 0 && _roi.height >= 0);
 
     return _roi;
